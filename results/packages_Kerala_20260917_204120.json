@@ -1,0 +1,35 @@
+{
+  "destination": "Kerala",
+  "packages": [
+    {
+      "name": "Epic Kerala - Mega Price Drop Sale",
+      "duration": "4N/5D",
+      "inclusions": "Intercity Car Transfers, 4 Star, 3 Star Hotels & Houseboat, Airport Pickup & Drop, 5 Activities, Selected Meals, Free Guided Spice Plantation Tour, Visit to Alappuzha Beach, Periyar Lake, Eravikulam national park, Visit to Tata Tea Museum, Valara Waterfalls, Mattupetty Dam",
+      "price": "₹18,194/Person (Total Price: ₹36,388)"
+    },
+    {
+      "name": "Freebie Inside - Kerala Paradise",
+      "duration": "6N/7D",
+      "inclusions": "Intercity Car Transfers, 4 Star Hotels & Houseboat, Airport Pickup & Drop, 9 Activities, Selected Meals, Boating at Periyar Lake, Complimentary Visit to Kanyakumari, Free Guided Spice Plantation Tour",
+      "price": "₹31,127/Person (Total Price: ₹62,254)"
+    },
+    {
+      "name": "Magical Kerala Holiday",
+      "duration": "5N/6D",
+      "inclusions": "Intercity Car Transfers, 3 Star Hotels, Airport Pickup & Drop, 10 Activities, Selected Meals, Houseboat Day Cruise with Lunch, Photoshoot at Tea Estate, Day Excursion to Kanyakumari",
+      "price": "₹25,901/Person (Total Price: ₹51,802)"
+    },
+    {
+      "name": "Week-long Romantic Kerala Getaway",
+      "duration": "6N/7D",
+      "inclusions": "Intercity Car Transfers, 3 Star Hotels, Airport Pickup & Drop, 13 Activities, Selected Meals, Photoshoot at Tea Estate, Boating at Periyar Lake, Kathakali Dance Show",
+      "price": "₹27,708/Person (Total Price: ₹55,416)"
+    },
+    {
+      "name": "Romantic Kerala Holiday",
+      "duration": "4N/5D",
+      "inclusions": "Intercity Car Transfers, 4 Star Hotels & Houseboat, Airport Pickup & Drop, 9 Activities, Selected Meals, Boating at Periyar Lake, Free Guided Spice Plantation Tour, Candle Light Dinner",
+      "price": "₹26,600/Person (Total Price: ₹53,200)"
+    }
+  ]
+}

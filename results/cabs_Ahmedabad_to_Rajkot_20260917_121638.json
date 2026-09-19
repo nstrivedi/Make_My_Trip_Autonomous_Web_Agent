@@ -1,0 +1,36 @@
+{
+  "from_location": "Ahmedabad, Gujarat, India",
+  "to_location": "Rajkot, Gujarat, India",
+  "cabs": [
+    {
+      "cab_type": "Sedan",
+      "provider": "N/A",
+      "price": "₹2,020",
+      "eta": "10:00 AM"
+    },
+    {
+      "cab_type": "Hatchback",
+      "provider": "N/A",
+      "price": "₹2,181",
+      "eta": "10:00 AM"
+    },
+    {
+      "cab_type": "Hatchback",
+      "provider": "N/A",
+      "price": "₹2,427",
+      "eta": "10:00 AM"
+    },
+    {
+      "cab_type": "SUV",
+      "provider": "N/A",
+      "price": "₹2,582",
+      "eta": "10:00 AM"
+    },
+    {
+      "cab_type": "Sedan",
+      "provider": "N/A",
+      "price": "₹2,654",
+      "eta": "10:00 AM"
+    }
+  ]
+}

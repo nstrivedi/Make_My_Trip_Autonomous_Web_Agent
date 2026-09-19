@@ -1,0 +1,40 @@
+{
+  "city": "Goa",
+  "villas": [
+    {
+      "name": "Emperor Ozran by Alaya Stays",
+      "location": "Vagator | 980 m drive to Vagator Beach",
+      "rating": "4.7",
+      "price_per_night": "₹7,770",
+      "property_type": "Private Room in a Villa"
+    },
+    {
+      "name": "ama Stays & Trails Aguada Villas , Goa",
+      "location": "Candolim | 6 minutes walk to Candolim Beach",
+      "rating": "5.0",
+      "price_per_night": "₹10,400",
+      "property_type": "Private Room in a Villa"
+    },
+    {
+      "name": "Forste Arcangela, Sangolda",
+      "location": "Bardez | 6.4 km drive to Calangute Beach",
+      "rating": "4.6",
+      "price_per_night": "₹2,212",
+      "property_type": "Private Room in a Villa"
+    },
+    {
+      "name": "Alaya Stays 3 BHK Veera Marina Apartment with Pool",
+      "location": "Candolim | 1.9 km drive to Candolim Beach",
+      "rating": "4.8",
+      "price_per_night": "₹6,754",
+      "property_type": "Entire 3-Bedroom Villa"
+    },
+    {
+      "name": "ELIVAAS Signature Villa Plume",
+      "location": "Calangute | 4 km drive to Calangute Beach",
+      "rating": "5.0",
+      "price_per_night": "₹12,542",
+      "property_type": "Entire 4-Bedroom Villa"
+    }
+  ]
+}

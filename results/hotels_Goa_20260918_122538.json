@@ -1,0 +1,35 @@
+{
+  "city": "Goa",
+  "hotels": [
+    {
+      "name": "Ginger Goa, Candolim",
+      "location": "Candolim",
+      "rating": "4.2",
+      "price_per_night": "₹3,599"
+    },
+    {
+      "name": "Beira Mar Beach Resorts",
+      "location": "Benaulim",
+      "rating": "4.4",
+      "price_per_night": "₹4,914"
+    },
+    {
+      "name": "Resort Primo Bom Terra Verde",
+      "location": "Baga",
+      "rating": "3.9",
+      "price_per_night": "₹1,340"
+    },
+    {
+      "name": "Panjim City Dorms",
+      "location": "Panjim",
+      "rating": "3.5",
+      "price_per_night": "₹876"
+    },
+    {
+      "name": "The Hosteller Goa, Anjuna",
+      "location": "Arpora",
+      "rating": "4.3",
+      "price_per_night": "₹1,320"
+    }
+  ]
+}

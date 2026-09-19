@@ -1,0 +1,36 @@
+{
+  "from_city": "Ahmedabad, India",
+  "to_city": "New Delhi, India",
+  "flights": [
+    {
+      "airline": "Air India",
+      "flight_number": "AI-2546",
+      "departure_time": "23:00",
+      "price": "₹ 6,240"
+    },
+    {
+      "airline": "IndiGo",
+      "flight_number": "6E-5385",
+      "departure_time": "00:05",
+      "price": "₹ 6,470"
+    },
+    {
+      "airline": "IndiGo",
+      "flight_number": "6E-932",
+      "departure_time": "21:50",
+      "price": "₹ 6,470"
+    },
+    {
+      "airline": "Air India",
+      "flight_number": "AI-532",
+      "departure_time": "21:30",
+      "price": "₹ 6,550"
+    },
+    {
+      "airline": "IndiGo",
+      "flight_number": "6E-2263",
+      "departure_time": "19:25",
+      "price": "₹ 6,890"
+    }
+  ]
+}
