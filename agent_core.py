@@ -42,9 +42,11 @@ def _pick_date(field: str, d: date) -> str:
     )
 
 
-def _trav(adults: int, children: int, rooms=None, child_age=None) -> dict:
+def _trav(adults: int, children: int, rooms=None, child_age=None, infants: int = 0) -> dict:
     """Travellers block stored in every result / JSON file."""
     d = {"adults": int(adults), "children": int(children), "total": int(adults) + int(children)}
+    if infants:
+        d["infants"] = int(infants)   # under 2 yrs, travel on an adult's lap (not part of "total")
     if rooms:
         d["rooms"] = int(rooms)
     if child_age is not None and int(children) > 0:
@@ -52,20 +54,24 @@ def _trav(adults: int, children: int, rooms=None, child_age=None) -> dict:
     return d
 
 
-def _flight_travellers(adults: int, children: int) -> str:
-    return (f"Open the TRAVELLERS & CLASS selector and set Adults to {adults} and Children (2-12 yrs) to "
-            f"{children}; keep Infants at 0 and the class on Economy; then click Apply / Done.")
+def _flight_travellers(adults: int, children: int, infants: int = 0) -> str:
+    return (f"Open the TRAVELLERS & CLASS selector and set Adults to {adults}, Children (2-12 yrs) to "
+            f"{children} and Infants (under 2 yrs) to {infants}; keep the class on Economy; "
+            f"then click Apply / Done.")
 
 
-def _guests_instr(adults: int, children: int, rooms: int, child_age: int) -> str:
+def _guests_instr(adults: int, children: int, rooms: int, child_age: int, infants: int = 0) -> str:
     kids = f" and {children} child(ren) (each child aged {child_age} years)" if children else ""
+    babies = (f" Also add {infants} infant(s) (under 2 years) as child guest(s) with the age set to "
+              f"'Below 1 year' (or 1 year if that is the lowest option)." if infants else "")
     return (f"Open the 'Rooms & Guests' selector. Set Rooms to {rooms} and spread {adults} adult(s){kids} "
-            f"across the rooms as evenly as possible (every room needs at least 1 adult). Click Apply.")
+            f"across the rooms as evenly as possible (every room needs at least 1 adult).{babies} Click Apply.")
 
 
-def _optional_guests(adults: int, children: int) -> str:
-    return (f"If the page has a travellers / guests selector, set Adults to {adults} and Children to {children}. "
-            f"If there is none, skip this step.")
+def _optional_guests(adults: int, children: int, infants: int = 0) -> str:
+    babies = f" and Infants (under 2 yrs) to {infants}" if infants else ""
+    return (f"If the page has a travellers / guests selector, set Adults to {adults} and Children to {children}"
+            f"{babies}. If there is none, skip this step.")
 
 
 def _safe(text: str) -> str:
@@ -204,7 +210,7 @@ class FareCalendarResults(BaseModel):
     fares: List[FareDay]
 
 
-def _flight_steps(from_city, to_city, d, adults=1, children=0):
+def _flight_steps(from_city, to_city, d, adults=1, children=0, infants=0):
     return f"""
     Go to makemytrip.com.
     If any popup or login modal appears, close it first.
@@ -212,7 +218,7 @@ def _flight_steps(from_city, to_city, d, adults=1, children=0):
     In the 'From' field, type '{from_city}' and select it from the dropdown suggestions.
     In the 'To' field, type '{to_city}' and select it from the dropdown suggestions.
     {_pick_date('Departure', d)}
-    {_flight_travellers(adults, children)}
+    {_flight_travellers(adults, children, infants)}
     Click the Search button.
     Wait for results to load.
     """
@@ -220,9 +226,9 @@ def _flight_steps(from_city, to_city, d, adults=1, children=0):
 
 async def search_flights(from_city: str, to_city: str, travel_date: Optional[date] = None,
                          save: bool = True,
-        adults: int = 1, children: int = 0):
+        adults: int = 1, children: int = 0, infants: int = 0):
     d = _default_date(travel_date)
-    task = _flight_steps(from_city, to_city, d, adults, children) + """
+    task = _flight_steps(from_city, to_city, d, adults, children, infants) + """
     Read the DEPART date shown in the search bar at the top of the results page and put it in travel_date.
     Extract the top 5 flight results with airline name, flight number, departure time, and price.
     For every flight set departure_date to that same travel date.
@@ -231,7 +237,7 @@ async def search_flights(from_city: str, to_city: str, travel_date: Optional[dat
     return await _run(
         task, FlightResults,
         f"flights_{from_city}_to_{to_city}_{d.isoformat()}",
-        {"requested_date": d.isoformat(), "travellers": _trav(adults, children)}, save,
+        {"requested_date": d.isoformat(), "travellers": _trav(adults, children, infants=infants)}, save,
     )
 
 
@@ -402,12 +408,12 @@ def _build_fare_calendar(raw: dict, start: date, days: int = FARE_WINDOW_DAYS) -
 
 async def search_flight_fares(from_city: str, to_city: str, travel_date: Optional[date] = None,
                               save: bool = True, days: int = FARE_WINDOW_DAYS,
-                              adults: int = 1, children: int = 0):
+                              adults: int = 1, children: int = 0, infants: int = 0):
     """Cheapest fare for `days` dates (1..30), starting from the chosen date."""
     d = _default_date(travel_date)
     days = max(1, min(int(days), FARE_WINDOW_DAYS))
     end = d + timedelta(days=days - 1)
-    task = _flight_steps(from_city, to_city, d, adults, children) + f"""
+    task = _flight_steps(from_city, to_city, d, adults, children, infants) + f"""
     Now collect the LOWEST FARE for every date from {d.isoformat()} to {end.isoformat()} ({days} days).
     Above the flight list there is a row of date tabs; each tab shows a date and its lowest fare
     (for example 'Sat, Sep 19  ₹6,240').
@@ -422,7 +428,7 @@ async def search_flight_fares(from_city: str, to_city: str, travel_date: Optiona
     Do NOT click any flight and do NOT proceed to booking or payment. Stop once {end.isoformat()} is covered.
     """
     raw = await _agent_json(task, FareCalendarResults,
-                            {"requested_date": d.isoformat(), "travellers": _trav(adults, children)}, max(60, 40 + 3 * days))
+                            {"requested_date": d.isoformat(), "travellers": _trav(adults, children, infants=infants)}, max(60, 40 + 3 * days))
     if not raw:
         return None
     data = _build_fare_calendar(raw, d, days)
@@ -452,7 +458,7 @@ class TrainResults(BaseModel):
 
 async def search_trains(from_city: str, to_city: str, travel_date: Optional[date] = None,
                         save: bool = True,
-        adults: int = 1, children: int = 0):
+        adults: int = 1, children: int = 0, infants: int = 0):
     d = _default_date(travel_date)
     task = f"""
     Go to makemytrip.com.
@@ -471,7 +477,7 @@ async def search_trains(from_city: str, to_city: str, travel_date: Optional[date
     return await _run(
         task, TrainResults,
         f"trains_{from_city}_to_{to_city}_{d.isoformat()}",
-        {"requested_date": d.isoformat(), "travellers": _trav(adults, children)}, save,
+        {"requested_date": d.isoformat(), "travellers": _trav(adults, children, infants=infants)}, save,
     )
 
 
@@ -496,7 +502,7 @@ class BusResults(BaseModel):
 
 async def search_buses(from_city: str, to_city: str, travel_date: Optional[date] = None,
                        save: bool = True,
-        adults: int = 1, children: int = 0):
+        adults: int = 1, children: int = 0, infants: int = 0):
     d = _default_date(travel_date, 3)
     task = f"""
     Go to makemytrip.com.
@@ -515,7 +521,7 @@ async def search_buses(from_city: str, to_city: str, travel_date: Optional[date]
     return await _run(
         task, BusResults,
         f"buses_{from_city}_to_{to_city}_{d.isoformat()}",
-        {"requested_date": d.isoformat(), "travellers": _trav(adults, children)}, save,
+        {"requested_date": d.isoformat(), "travellers": _trav(adults, children, infants=infants)}, save,
     )
 
 
@@ -538,7 +544,7 @@ class CabResults(BaseModel):
 
 async def search_cabs(from_location: str, to_location: str, travel_date: Optional[date] = None,
                       save: bool = True,
-        adults: int = 1, children: int = 0):
+        adults: int = 1, children: int = 0, infants: int = 0):
     d = _default_date(travel_date, 2)
     task = f"""
     Go to makemytrip.com.
@@ -557,7 +563,7 @@ async def search_cabs(from_location: str, to_location: str, travel_date: Optiona
     return await _run(
         task, CabResults,
         f"cabs_{from_location}_to_{to_location}_{d.isoformat()}",
-        {"requested_date": d.isoformat(), "travellers": _trav(adults, children)}, save,
+        {"requested_date": d.isoformat(), "travellers": _trav(adults, children, infants=infants)}, save,
     )
 
 
@@ -580,7 +586,7 @@ class HotelResults(BaseModel):
 
 async def search_hotels(city: str, check_in: Optional[date] = None,
                         check_out: Optional[date] = None, save: bool = True,
-                        adults: int = 2, children: int = 0, rooms: int = 1, child_age: int = 8):
+                        adults: int = 2, children: int = 0, rooms: int = 1, child_age: int = 8, infants: int = 0):
     cin = _default_date(check_in)
     cout = check_out if check_out and check_out > cin else cin + timedelta(days=1)
     task = f"""
@@ -590,7 +596,7 @@ async def search_hotels(city: str, check_in: Optional[date] = None,
     In the city/destination field, type '{city}' and select it from the dropdown suggestions.
     {_pick_date('Check-In', cin)}
     {_pick_date('Check-Out', cout)}
-    {_guests_instr(adults, children, rooms, child_age)}
+    {_guests_instr(adults, children, rooms, child_age, infants)}
     Click the Search button.
     Wait for results to load.
     Read the check-in and check-out dates shown on the results page and put them in check_in and check_out.
@@ -601,7 +607,7 @@ async def search_hotels(city: str, check_in: Optional[date] = None,
         task, HotelResults,
         f"hotels_{city}_{cin.isoformat()}",
         {"requested_check_in": cin.isoformat(), "requested_check_out": cout.isoformat(),
-         "travellers": _trav(adults, children, rooms, child_age)}, save,
+         "travellers": _trav(adults, children, rooms, child_age, infants)}, save,
     )
 
 
@@ -625,7 +631,7 @@ class VillaResults(BaseModel):
 
 async def search_villas(city: str, check_in: Optional[date] = None,
                         check_out: Optional[date] = None, save: bool = True,
-                        adults: int = 2, children: int = 0, rooms: int = 1, child_age: int = 8):
+                        adults: int = 2, children: int = 0, rooms: int = 1, child_age: int = 8, infants: int = 0):
     cin = _default_date(check_in)
     cout = check_out if check_out and check_out > cin else cin + timedelta(days=1)
     task = f"""
@@ -635,7 +641,7 @@ async def search_villas(city: str, check_in: Optional[date] = None,
     In the city/destination field, type '{city}' and select it from the dropdown suggestions.
     {_pick_date('Check-In', cin)}
     {_pick_date('Check-Out', cout)}
-    {_guests_instr(adults, children, rooms, child_age)}
+    {_guests_instr(adults, children, rooms, child_age, infants)}
     Click the Search button.
     Wait for results to load.
     Look for a filter or category option labeled 'Villas', 'Homestays', or 'Alternate Accommodation' in the property type filters on the left side of the results page, and apply it.
@@ -648,7 +654,7 @@ async def search_villas(city: str, check_in: Optional[date] = None,
         task, VillaResults,
         f"villas_{city}_{cin.isoformat()}",
         {"requested_check_in": cin.isoformat(), "requested_check_out": cout.isoformat(),
-         "travellers": _trav(adults, children, rooms, child_age)}, save,
+         "travellers": _trav(adults, children, rooms, child_age, infants)}, save,
     )
 
 
@@ -669,7 +675,7 @@ class AttractionResults(BaseModel):
 
 
 async def search_attractions(city: str, visit_date: Optional[date] = None, save: bool = True,
-        adults: int = 1, children: int = 0):
+        adults: int = 1, children: int = 0, infants: int = 0):
     d = _default_date(visit_date, 14)
     task = f"""
     Go to makemytrip.com.
@@ -677,7 +683,7 @@ async def search_attractions(city: str, visit_date: Optional[date] = None, save:
     Click on the 'Things To Do' or 'Tours & Attractions' tab/section (it may also be under 'Holidays' menu).
     In the city/destination field, type '{city}' and select it from the dropdown suggestions.
     If the page has a date selector, {_pick_date('visit', d)}
-    {_optional_guests(adults, children)}
+    {_optional_guests(adults, children, infants)}
     Click the Search button.
     Wait for results to load.
     Put the date you selected in date_selected. If no date selector exists anywhere, write 'Not applicable'.
@@ -687,7 +693,7 @@ async def search_attractions(city: str, visit_date: Optional[date] = None, save:
     return await _run(
         task, AttractionResults,
         f"attractions_{city}_{d.isoformat()}",
-        {"requested_date": d.isoformat(), "travellers": _trav(adults, children)}, save,
+        {"requested_date": d.isoformat(), "travellers": _trav(adults, children, infants=infants)}, save,
     )
 
 
@@ -708,7 +714,7 @@ class PackageResults(BaseModel):
 
 
 async def search_packages(destination: str, travel_date: Optional[date] = None, save: bool = True,
-        adults: int = 1, children: int = 0):
+        adults: int = 1, children: int = 0, infants: int = 0):
     d = _default_date(travel_date, 30)
     task = f"""
     Go to makemytrip.com.
@@ -716,7 +722,7 @@ async def search_packages(destination: str, travel_date: Optional[date] = None, 
     Click on the 'Holidays' tab.
     In the destination field, type '{destination}' and select it from the dropdown suggestions.
     If there is a departure date or month selector, choose {d.strftime('%B %Y')} (day {d.day} if a day is asked for).
-    {_optional_guests(adults, children)}
+    {_optional_guests(adults, children, infants)}
     Click the Search button.
     Wait for results to load.
     Put the month/date you selected in travel_month. If there is no such selector, write 'Not applicable'.
@@ -726,7 +732,7 @@ async def search_packages(destination: str, travel_date: Optional[date] = None, 
     return await _run(
         task, PackageResults,
         f"packages_{destination}_{d.isoformat()}",
-        {"requested_date": d.isoformat(), "travellers": _trav(adults, children)}, save,
+        {"requested_date": d.isoformat(), "travellers": _trav(adults, children, infants=infants)}, save,
     )
 
 
@@ -747,7 +753,7 @@ class CruiseResults(BaseModel):
 
 
 async def search_cruises(destination: str, travel_date: Optional[date] = None, save: bool = True,
-        adults: int = 1, children: int = 0):
+        adults: int = 1, children: int = 0, infants: int = 0):
     d = _default_date(travel_date, 30)
     task = f"""
     Go to makemytrip.com.
@@ -756,7 +762,7 @@ async def search_cruises(destination: str, travel_date: Optional[date] = None, s
     If there is a search bar, search for 'Cruise packages {destination}'.
     If a direct search is not possible, navigate to the cruise packages section.
     If there is a departure date or month selector, choose {d.strftime('%B %Y')}.
-    {_optional_guests(adults, children)}
+    {_optional_guests(adults, children, infants)}
     Wait for the page to load.
     Put the month/date you selected in travel_month. If there is no such selector, write 'Not applicable'.
     Extract the top 5 cruise package results with package name, duration, destination, and price.
@@ -765,5 +771,5 @@ async def search_cruises(destination: str, travel_date: Optional[date] = None, s
     return await _run(
         task, CruiseResults,
         f"cruises_{destination}_{d.isoformat()}",
-        {"requested_date": d.isoformat(), "travellers": _trav(adults, children)}, save,
+        {"requested_date": d.isoformat(), "travellers": _trav(adults, children, infants=infants)}, save,
     )
