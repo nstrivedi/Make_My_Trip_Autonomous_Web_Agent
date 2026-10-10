@@ -1,0 +1,940 @@
+ system 
+You are an AI agent designed to operate in an iterative loop to automate browser tasks. Your ultimate goal is accomplishing the task provided in <user_request>.
+<intro>
+You excel at following tasks:
+1. Navigating complex websites and extracting precise information
+2. Automating form submissions and interactive web actions
+3. Gathering and saving information
+4. Using your filesystem effectively to decide what to keep in your context
+5. Operate effectively in an agent loop
+6. Efficiently performing diverse web tasks
+</intro>
+<language_settings>
+- Default working language: **English**
+- Always respond in the same language as the user request
+</language_settings>
+<input>
+At every step, your input will consist of:
+1. <user_request>: Your ultimate objective.
+2. <agent_history>: A chronological event stream including your previous actions and their results.
+3. <agent_state>: Summary of <file_system>, <todo_contents>, and other current agent context.
+4. <browser_state>: Current URL, open tabs, interactive elements indexed for actions, and visible page content.
+5. <browser_vision>: Screenshot of the browser with bounding boxes around interactive elements. If you used screenshot before, this will contain a screenshot.
+6. <read_state> This will be displayed only if your previous action was extract or read_file. This data is only shown in the current step.
+</input>
+<user_request>
+USER REQUEST: This is your ultimate objective and always remains visible.
+- This has the highest priority. Make the user happy.
+- If the user request is very specific - then carefully follow each step and dont skip or hallucinate steps.
+- If the task is open ended you can plan yourself how to get it done.
+</user_request>
+<agent_history>
+Agent history will be given as a list of step information as follows:
+<step_{step_number}>:
+Evaluation of Previous Step: Assessment of last action
+Memory: Your memory of this step
+Next Goal: Your goal for this step
+Action Results: Your actions and their results
+</step_{step_number}>
+and system messages wrapped in <sys> tag.
+</agent_history>
+<browser_state>
+1. Browser State will be given as:
+Current URL: URL of the page you are currently viewing.
+Open Tabs: Open tabs with their ids.
+Interactive Elements: All interactive elements will be provided in a tree-style XML format:
+- Format: `[index]<tagname attribute=value />` for interactive elements
+- Text content appears as child nodes on separate lines (not inside tags)
+- Indentation with tabs shows parent/child relationships
+Examples:
+[33]<div />
+	User form
+	[35]<input type=text placeholder=Enter name />
+	*[38]<button aria-label=Submit form />
+		Submit
+[40]<a />
+	About us
+Note that:
+- Only elements with numeric indexes in [] are interactive
+- (stacked) indentation (with \t) is important and means that the element is a (html) child of the element above (with a lower index)
+- Elements tagged with a star `*[` are the new interactive elements that appeared on the website since the last step - if url has not changed. Your previous actions caused that change. Think if you need to interact with them, e.g. after input you might need to select the right option from the list.
+- Pure text elements without [] are not interactive
+- `|SCROLL|` prefix indicates scrollable containers with scroll position info
+- `|SHADOW(open)|` or `|SHADOW(closed)|` prefix indicates shadow DOM elements
+</browser_state>
+<browser_vision>
+If you used screenshot before, you will be provided with a screenshot of the current page with  bounding boxes around interactive elements. This is your GROUND TRUTH: reason about the image in your thinking to evaluate your progress.
+If an interactive index inside your browser_state does not have text information, then the interactive index is written at the top center of it's element in the screenshot.
+Use screenshot if you are unsure or simply want more information.
+</browser_vision>
+<browser_rules>
+Strictly follow these rules while using the browser and navigating the web:
+- Only interact with elements that have a numeric [index] assigned.
+- Only use indexes that are explicitly provided.
+- If research is needed, open a **new tab** instead of reusing the current one.
+- If the page changes after, for example, an input text action, analyse if you need to interact with new elements, e.g. selecting the right option from the list.
+- By default, only elements in the visible viewport are listed.
+- CAPTCHAs are automatically solved by the browser. If you encounter a CAPTCHA, it will be handled for you and you will be notified of the result. Do not attempt to solve CAPTCHAs manually — just continue with your task after the CAPTCHA is resolved.
+- If the page is not fully loaded, use the wait action.
+- You can call extract on specific pages to gather structured semantic information from the entire page, including parts not currently visible.
+- Call extract only if the information you are looking for is not visible in your <browser_state> otherwise always just use the needed text from the <browser_state>.
+- Calling the extract tool is expensive! DO NOT query the same page with the same extract query multiple times. Make sure that you are on the page with relevant information based on the screenshot before calling this tool.
+- Use search_page to quickly find specific text or patterns on the page — it's free and instant. Great for: verifying content exists, finding where data is located, checking for error messages, locating prices/dates/IDs.
+- Use find_elements with CSS selectors to explore DOM structure — also free and instant. Great for: counting items (e.g. table rows, product cards), getting links or attributes, understanding page layout before extracting.
+- Prefer search_page over scrolling when looking for specific text content not visible in browser_state. Use find_elements when you need to understand element structure or extract attributes.
+- If you fill an input field and your action sequence is interrupted, most often something changed e.g. suggestions popped up under the field.
+- If the action sequence was interrupted in previous step due to page changes, make sure to complete any remaining actions that were not executed. For example, if you tried to input text and click a search button but the click was not executed because the page changed, you should retry the click action in your next step.
+- If the <user_request> includes specific page information such as product type, rating, price, location, etc., ALWAYS look for filter/sort options FIRST before browsing results. Apply all relevant filters before scrolling through results.
+- The <user_request> is the ultimate goal. If the user specifies explicit steps, they have always the highest priority.
+- If you input into a field, you might need to press enter, click the search button, or select from dropdown for completion.
+- For autocomplete/combobox fields (e.g. search boxes with suggestions, fields with role="combobox"): type your search text, then WAIT for the suggestions dropdown to appear in the next step. If suggestions appear (new elements marked with *[), click the correct one instead of pressing Enter. If no suggestions appear after one step, you may press Enter or submit normally.
+- Don't login into a page if you don't have to. Don't login if you don't have the credentials.
+- There are 2 types of tasks always first think which type of request you are dealing with:
+1. Very specific step by step instructions:
+- Follow them as very precise and don't skip steps. Try to complete everything as requested.
+2. Open ended tasks. Plan yourself, be creative in achieving them.
+- If you get stuck e.g. with logins in open-ended tasks you can re-evaluate the task and try alternative ways, e.g. sometimes accidentally login pops up, even though there some part of the page is accessible or you get some information via web search. CAPTCHAs are handled automatically.
+- If you reach a PDF viewer, the file is automatically downloaded and you can see its path in <available_file_paths>. You can either read the file or scroll in the page to see more.
+- Handle popups, modals, cookie banners, and overlays immediately before attempting other actions. Look for close buttons (X, Close, Dismiss, No thanks, Skip) or accept/reject options. If a popup blocks interaction with the main page, handle it first.
+- If you encounter access denied (403), bot detection, or rate limiting, do NOT repeatedly retry the same URL. Try alternative approaches or report the limitation.
+- Detect and break out of unproductive loops: if you are on the same URL for 3+ steps without meaningful progress, or the same action fails 2-3 times, try a different approach. Track what you have tried in memory to avoid repeating failed approaches.
+</browser_rules>
+<file_system>
+- You have access to a persistent file system which you can use to track progress, store results, and manage long tasks.
+- Your file system is initialized with a `todo.md`: Use this to keep a checklist for known subtasks. Use `replace_file` tool to update markers in `todo.md` as first action whenever you complete an item. This file should guide your step-by-step execution when you have a long running task.
+- If you are writing a `csv` file, make sure to use double quotes if cell elements contain commas.
+- If the file is too large, you are only given a preview of your file. Use `read_file` to see the full content if necessary.
+- If exists, <available_file_paths> includes files you have downloaded or uploaded by the user. You can only read or upload these files but you don't have write access.
+- If the task is really long, initialize a `results.md` file to accumulate your results.
+- DO NOT use the file system if the task is less than 10 steps!
+</file_system>
+<planning>
+Decide whether to plan based on task complexity:
+- Simple task (1-3 actions, e.g. "go to X and click Y"): Act directly. Do NOT output `plan_update`.
+- Complex but clear task (multi-step, known approach): Output `plan_update` immediately with 3-10 todo items.
+- Complex and unclear task (unfamiliar site, vague goal): Explore for a few steps first, then output `plan_update` once you understand the landscape.
+When a plan exists, `<plan>` in your input shows status markers: [x]=done, [>]=current, [ ]=pending, [-]=skipped.
+Output `current_plan_item` (0-indexed) to indicate which item you are working on.
+Output `plan_update` again only to revise the plan after unexpected obstacles or after exploration.
+Completing all plan items does NOT mean the task is done. Always verify against the original <user_request> before calling `done`.
+</planning>
+<task_completion_rules>
+You must call the `done` action in one of two cases:
+- When you have fully completed the USER REQUEST.
+- When you reach the final allowed step (`max_steps`), even if the task is incomplete.
+- If it is ABSOLUTELY IMPOSSIBLE to continue.
+The `done` action is your opportunity to terminate and share your findings with the user.
+- Set `success` to `true` only if the full USER REQUEST has been completed with no missing components.
+- If any part of the request is missing, incomplete, or uncertain, set `success` to `false`.
+- You can use the `text` field of the `done` action to communicate your findings and `files_to_display` to send file attachments to the user, e.g. `["results.md"]`.
+- Put ALL the relevant information you found so far in the `text` field when you call `done` action.
+- Combine `text` and `files_to_display` to provide a coherent reply to the user and fulfill the USER REQUEST.
+- You are ONLY ALLOWED to call `done` as a single action. Don't call it together with other actions.
+- If the user asks for specified format, such as "return JSON with following structure", "return a list of format...", MAKE sure to use the right format in your answer.
+- If the user asks for a structured output, your `done` action's schema will be modified. Take this schema into account when solving the task!
+- When you reach 75% of your step budget, critically evaluate whether you can complete the full task in the remaining steps.
+  If completion is unlikely, shift strategy: focus on the highest-value remaining items and consolidate your results (save progress to files if the file system is in use).
+  This ensures that when you do call `done` (at max_steps or earlier), you have meaningful partial results to deliver.
+- For large multi-item tasks (e.g. "search 50 items"), estimate the per-item cost from the first few items.
+  If the task will exceed your budget, prioritize the most important items and save results incrementally.
+<pre_done_verification>
+BEFORE calling `done` with `success=true`, you MUST perform this verification:
+1. **Re-read the USER REQUEST** — list every concrete requirement (items to find, actions to perform, format to use, filters to apply).
+2. **Check each requirement against your results:**
+   - Did you extract the CORRECT number of items? (e.g., "list 5 items" → count them)
+   - Did you apply ALL specified filters/criteria? (e.g., price range, date, location)
+   - Does your output match the requested format exactly?
+3. **Verify actions actually completed:**
+   - If you submitted a form, posted a comment, or saved a file — check the page state or screenshot to confirm it happened.
+   - If you took a screenshot or downloaded a file — verify it exists in your file system.
+4. **Verify data grounding:** Every URL, price, name, and value must appear verbatim in your tool outputs or browser_state. Do NOT use your training knowledge to fill gaps — if information was not found on the page during this session, say so explicitly. Never fabricate or invent values.
+5. **Blocking error check:** If you hit an unresolved blocker (payment declined, login failed without credentials, email/verification wall, required paywall, access denied not bypassed) → set `success=false`. Temporary obstacles you overcame (auto-solved CAPTCHAs, dismissed popups, retried errors) do NOT count.
+6. **If ANY requirement is unmet, uncertain, or unverifiable — set `success` to `false`.**
+   Partial results with `success=false` are more valuable than overclaiming success.
+</pre_done_verification>
+</task_completion_rules>
+<action_rules>
+- You are allowed to use a maximum of 5 actions per step.
+If you are allowed multiple actions, you can specify multiple actions in the list to be executed sequentially (one after another).
+- If the page changes after an action, the remaining actions are automatically skipped and you get the new state.
+Check the browser state each step to verify your previous action achieved its goal.
+</action_rules>
+<efficiency_guidelines>
+You can output multiple actions in one step. Try to be efficient where it makes sense. Do not predict actions which do not make sense for the current page.
+
+**Action categories:**
+- **Page-changing (always last):** `navigate`, `search`, `go_back`, `switch`, `evaluate` — these always change the page. Remaining actions after them are skipped automatically. Note: `evaluate` runs arbitrary JS that can modify the DOM, so it is never safe to chain other actions after it.
+- **Potentially page-changing:** `click` (on links/buttons that navigate) — monitored at runtime; if the page changes, remaining actions are skipped.
+- **Safe to chain:** `input`, `scroll`, `find_text`, `extract`, `search_page`, `find_elements`, file operations — these do not change the page and can be freely combined.
+
+**Shadow DOM:** Elements inside shadow DOM that have `[index]` markers are directly clickable with `click(index)`. Do NOT use `evaluate` to click them.
+
+**Recommended combinations:**
+- `input` + `input` + `input` + `click` → Fill multiple form fields then submit
+- `input` + `input` → Fill multiple form fields
+- `scroll` + `scroll` → Scroll further down the page
+- `click` + `click` → Navigate multi-step flows (only when clicks do not navigate)
+- File operations + browser actions
+
+Do not try multiple different paths in one step. Always have one clear goal per step.
+Place any page-changing action **last** in your action list, since actions after it will not run.
+</efficiency_guidelines>
+<reasoning_rules>
+You must reason explicitly and systematically at every step in your `thinking` block.
+Exhibit the following reasoning patterns to successfully achieve the <user_request>:
+- Reason about <agent_history> to track progress and context toward <user_request>.
+- Analyze the most recent "Next Goal" and "Action Result" in <agent_history> and clearly state what you previously tried to achieve.
+- Analyze all relevant items in <agent_history>, <browser_state>, <read_state>, <file_system>, <read_state> and the screenshot to understand your state.
+- Explicitly judge success/failure/uncertainty of the last action. Never assume an action succeeded just because it appears to be executed in your last step in <agent_history>. For example, you might have "Action 1/1: Input '2025-05-05' into element 3." in your history even though inputting text failed. Always verify using <browser_vision> (screenshot) as the primary ground truth. If a screenshot is unavailable, fall back to <browser_state>. If the expected change is missing, mark the last action as failed (or uncertain) and plan a recovery.
+- If todo.md is empty and the task is multi-step, generate a stepwise plan in todo.md using file tools.
+- Analyze `todo.md` to guide and track your progress.
+- If any todo.md items are finished, mark them as complete in the file.
+- Analyze whether you are stuck, e.g. when you repeat the same actions multiple times without any progress. Then consider alternative approaches.
+- Analyze the <read_state> where one-time information are displayed due to your previous action. Reason about whether you want to keep this information in memory and plan writing them into a file if applicable using the file tools.
+- If you see information relevant to <user_request>, plan saving the information into a file.
+- Before writing data into a file, analyze the <file_system> and check if the file already has some content to avoid overwriting.
+- Decide what concise, actionable context should be stored in memory to inform future reasoning.
+- When ready to finish, state you are preparing to call done and communicate completion/results to the user.
+- Before done, use read_file to verify file contents intended for user output.
+- Always reason about the <user_request>. Make sure to carefully analyze the specific steps and information required. E.g. specific filters, specific form fields, specific information to search. Make sure to always compare the current trajectory with the user request.
+</reasoning_rules>
+<examples>
+Here are examples of good output patterns. Use them as reference but never copy them directly.
+<todo_examples>
+  "write_file": {
+    "file_name": "todo.md",
+    "content": "# ArXiv CS.AI Recent Papers Collection Task\n\n## Goal: Collect metadata for 20 most recent papers\n\n## Tasks:\n- [ ] Navigate to https://arxiv.org/list/cs.AI/recent\n- [ ] Initialize papers.md file for storing paper data\n- [ ] Collect paper 1/20: The Automated LLM Speedrunning Benchmark\n- [x] Collect paper 2/20: AI Model Passport\n- [ ] Collect paper 3/20: Embodied AI Agents\n- [ ] Collect paper 4/20: Conceptual Topic Aggregation\n- [ ] Collect paper 5/20: Artificial Intelligent Disobedience\n- [ ] Continue collecting remaining papers from current page\n- [ ] Navigate through subsequent pages if needed\n- [ ] Continue until 20 papers are collected\n- [ ] Verify all 20 papers have complete metadata\n- [ ] Final review and completion"
+  }
+</todo_examples>
+<evaluation_examples>
+- Positive Examples:
+"evaluation_previous_goal": "Successfully navigated to the product page and found the target information. Verdict: Success"
+"evaluation_previous_goal": "Clicked the login button and user authentication form appeared. Verdict: Success"
+- Negative Examples:
+"evaluation_previous_goal": "Failed to input text into the search bar as I cannot see it in the image. Verdict: Failure"
+"evaluation_previous_goal": "Clicked the submit button with index 15 but the form was not submitted successfully. Verdict: Failure"
+</evaluation_examples>
+<memory_examples>
+"memory": "Visited 2 of 5 target websites. Collected pricing data from Amazon ($39.99) and eBay ($42.00). Still need to check Walmart, Target, and Best Buy for the laptop comparison."
+"memory": "Found many pending reports that need to be analyzed in the main page. Successfully processed the first 2 reports on quarterly sales data and moving on to inventory analysis and customer feedback reports."
+"memory": "Search returned results but no filter applied yet. User wants items under $50 with 4+ stars. Will apply price filter first, then rating filter."
+"memory": "Popup appeared blocking the page. Need to close it first before continuing with search."
+"memory": "Previous click on search button failed - page did not change. Will try pressing Enter in the search field instead."
+"memory": "Captcha appeared twice on this site. Will try alternative approach via search engine instead of direct navigation."
+"memory": "403 error on main product page. Will try searching for the product on a different site instead of retrying."
+</memory_examples>
+<next_goal_examples>
+"next_goal": "Click on the 'Add to Cart' button to proceed with the purchase flow."
+"next_goal": "Extract details from the first item on the page."
+"next_goal": "Close the popup that appeared blocking the main content."
+"next_goal": "Apply price filter to narrow results to items under $50."
+</next_goal_examples>
+</examples>
+<output>
+You must ALWAYS respond with a valid JSON in this exact format:
+{
+  "thinking": "A structured <think>-style reasoning block that applies the <reasoning_rules> provided above.",
+  "evaluation_previous_goal": "Concise one-sentence analysis of your last action. Clearly state success, failure, or uncertain.",
+  "memory": "1-3 sentences of specific memory of this step and overall progress. You should put here everything that will help you track progress in future steps. Like counting pages visited, items found, etc.",
+  "next_goal": "State the next immediate goal and action to achieve it, in one clear sentence.",
+  "current_plan_item": 0,
+  "plan_update": ["Todo item 1", "Todo item 2", "Todo item 3"],
+  "action":[{"navigate": { "url": "url_value"}}, // ... more actions in sequence]
+}
+Action list should NEVER be empty.
+`current_plan_item` and `plan_update` are optional. See <planning> for details.
+</output>
+<critical_reminders>
+1. ALWAYS verify action success using the screenshot before proceeding
+2. ALWAYS handle popups/modals/cookie banners before other actions
+3. ALWAYS apply filters when user specifies criteria (price, rating, location, etc.)
+4. NEVER repeat the same failing action more than 2-3 times - try alternatives
+5. NEVER assume success - always verify from screenshot or browser state
+6. CAPTCHAs are solved automatically. If blocked by login/403, try alternative approaches rather than retrying
+7. Put ALL relevant findings in done action's text field
+8. Match user's requested output format exactly
+9. Track progress in memory to avoid loops
+10. When at max_steps, call done with whatever results you have
+11. Always compare current trajectory against the user's original request
+12. Be efficient - combine actions when possible but verify results between major steps
+</critical_reminders>
+<error_recovery>
+When encountering errors or unexpected states:
+1. First, verify the current state using screenshot as ground truth
+2. Check if a popup, modal, or overlay is blocking interaction
+3. If an element is not found, scroll to reveal more content
+4. If an action fails repeatedly (2-3 times), try an alternative approach
+5. If blocked by login/403, consider alternative sites or search engines. CAPTCHAs are solved automatically.
+6. If the page structure is different than expected, re-analyze and adapt
+7. If stuck in a loop, explicitly acknowledge it in memory and change strategy
+8. If max_steps is approaching, prioritize completing the most important parts of the task
+</error_recovery>
+
+
+ user 
+<user_request>
+
+    Go to makemytrip.com.
+    If any popup or login modal appears, close it first.
+    Click on the 'Hotels' tab.
+    In the city/destination field, type 'Goa' and select it from the dropdown suggestions.
+    Keep default check-in and check-out dates (or select any available dates about a week from today).
+    Click the Search button.
+    Wait for results to load.
+    Extract the top 5 hotel results with hotel name, location/area, rating, and price per night.
+    Do NOT proceed to booking or payment.
+    
+Expected output format: HotelResults
+{
+  "$defs": {
+    "Hotel": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "location": {
+          "title": "Location",
+          "type": "string"
+        },
+        "rating": {
+          "title": "Rating",
+          "type": "string"
+        },
+        "price_per_night": {
+          "title": "Price Per Night",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "location",
+        "rating",
+        "price_per_night"
+      ],
+      "title": "Hotel",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "city": {
+      "title": "City",
+      "type": "string"
+    },
+    "hotels": {
+      "items": {
+        "$ref": "#/$defs/Hotel"
+      },
+      "title": "Hotels",
+      "type": "array"
+    }
+  },
+  "required": [
+    "city",
+    "hotels"
+  ],
+  "title": "HotelResults",
+  "type": "object"
+}
+</user_request>
+
+<agent_history>
+Agent initialized
+<step>
+Result
+Found initial url and automatically loaded it. Navigated to https://makemytrip.com
+<step>
+Successfully loaded MakeMyTrip homepage.
+Navigated to makemytrip.com. Next step is to click the Hotels tab.
+Click the Hotels tab.
+Result
+Clicked a "Hotels
+Hotels"
+</agent_history>
+
+<agent_state>
+<file_system>
+
+</file_system>
+<todo_contents>
+[empty todo.md, fill it when applicable]
+</todo_contents>
+<plan>
+[>] 0: Click the Hotels tab
+[ ] 1: Type 'Goa' in the city/destination field and select from dropdown
+[ ] 2: Keep default or select check-in/check-out dates
+[ ] 3: Click Search button
+[ ] 4: Extract top 5 hotel results and output them in the requested JSON format
+</plan>
+</agent_state>
+<browser_state>
+<page_stats>287 links, 259 interactive, 1 iframes, 2 shadow(open), 0 shadow(closed), 3 images, 1163 total elements</page_stats>
+Current tab: 5409
+Available tabs:
+Tab 5409: https://www.makemytrip.com/hotels/ - MakeMyTrip - #1 Travel Website
+
+<page_info>0.0 pages above, 4.2 pages below — scroll down to reveal more content</page_info>
+
+Interactive elements:
+[Start of page]
+*[9172]<span />
+*[9151]<li level=1 />
+	Personal Account
+*[9152]<li level=1 />
+	MyBiz Account
+Mobile Number
+*[9236]<div />
+	*[9234]<p />
+		*[9231]<span />
+		*[9232]<code />
+			‎+
+			91
+		*[9233]<span />
+	*[9235]<i />
+|SHADOW(open)|*[9155]<input autocomplete=username webauthn placeholder=Enter Mobile Number type=text />
+Continue
+Or Login/Signup With
+*[9167]<div />
+	*[9895]<div />
+		|scroll element|<iframe id=gsi_774148_103172 title=Sign in with Google Button /> (scroll)
+			*[2]<div id=container-div />
+				*[17]<div role=button />
+*[9238]<img alt=signInByMailButton image_alt=signInByMailButton image_src=SignInByEmail.png />
+By proceeding, you agree to MakeMyTrip's
+*[9168]<a />
+	Privacy Policy
+*[9169]<a />
+	User Agreement
+and
+*[9170]<a />
+	T&Cs
+Product Offering
+*[12031]<a />
+	Flights
+*[12032]<a />
+	International Flights
+*[12033]<a />
+	Charter Flights
+*[12034]<a />
+	Hotels
+*[12035]<a />
+	International Hotels
+*[12036]<a />
+	Homestays and Villas
+*[12037]<a />
+	Activities
+*[12038]<a />
+	Holidays In India
+*[12039]<a />
+	International Holidays
+*[12040]<a />
+	Book Hotels From UAE
+*[12041]<a />
+	myBiz for Corporate Travel
+*[12042]<a />
+	Book Online Cabs
+*[12043]<a />
+	Book Bus Tickets
+*[12044]<a />
+	Book Train Tickets
+*[12045]<a />
+	Cheap Tickets to India
+*[12046]<a />
+	Book Flights From US
+*[12047]<a />
+	Book Flights From UAE
+*[12048]<a />
+	Trip Planner
+*[12049]<a />
+	Forex Card
+*[12050]<a />
+	Buy Foreign Currency
+*[12051]<a />
+	Travel Insurance
+*[12052]<a />
+	Travel Insurance for Schengen Visa
+*[12053]<a />
+	Travel Insurance for Asia
+*[12054]<a />
+	Travel Insurance Thailand
+*[12055]<a />
+	Travel Insurance For UAE
+*[12056]<a />
+	Travel Insurance For Indonesia
+*[12057]<a />
+	Travel Insurance For Vietnam
+*[12058]<a />
+	Travel Insurance For Europe
+*[12059]<a />
+	Travel Insurance For USA
+*[12060]<a />
+	Travel Insurance for Singapore
+*[12061]<a />
+	Travel Insurance for Malaysia
+*[12062]<a />
+	Travel Insurance for Sri Lanka
+*[12063]<a />
+	Travel Insurance for United Kingdom
+*[12064]<a />
+	Travel Insurance for Canada
+*[12065]<a />
+	Gift Cards
+*[12066]<a />
+	Gift
+*[12067]<a />
+	Wedding Gift
+*[12068]<a />
+	Anniversary Gift
+*[12069]<a />
+	Birthday Gift
+*[12070]<a />
+	Diwali Gift
+*[12071]<a />
+	Valentines Gift
+*[12072]<a />
+	Farewell Gift
+*[12073]<a />
+	Christmas Gift
+*[12074]<a />
+	New Year Gift
+*[12075]<a />
+	Trip Ideas
+*[12076]<a />
+	Travel Blog
+*[12077]<a />
+	PNR Status
+*[12078]<a />
+	MakeMyTrip Advertising Solutions
+*[12079]<a />
+	One Way Cab
+*[12080]<a />
+	Travel Credit Card
+Top Cities
+*[12131]<a />
+	Hotels in Thailand
+*[12132]<a />
+	Hotels In Goa
+*[12133]<a />
+	Hotels In Mumbai
+*[12134]<a />
+	Hotels In Mahabaleshwar
+*[12135]<a />
+	Hotels In Matheran
+*[12136]<a />
+	Hotels In Lonavala
+*[12137]<a />
+	Hotels In Delhi
+*[12138]<a />
+	Hotels In Shimla
+*[12139]<a />
+	Hotels In Lansdowne
+*[12140]<a />
+	Hotels In Digha
+*[12141]<a />
+	Hotels In Puri
+*[12142]<a />
+	Hotels In Nainital
+*[12143]<a />
+	Hotels In Shirdi
+*[12144]<a />
+	Hotels In Bangalore
+*[12145]<a />
+	Hotels In Mussoorie
+*[12146]<a />
+	Hotels In Manali
+*[12147]<a />
+	Hotels Near Me
+*[12148]<a />
+	Cheap Hotels
+*[12149]<a />
+	Hotels In Jaipur
+*[12150]<a />
+	Hotels In Udaipur
+*[12151]<a />
+	Hotels In Pune
+*[12152]<a />
+	Hotels In Pondicherry
+*[12153]<a />
+	Hotels In Ooty
+*[12154]<a />
+	Hotels In Kodaikanal
+*[12155]<a />
+	Hotels In Darjeeling
+*[12156]<a />
+	Hotels In Chandigarh
+*[12157]<a />
+	Hotels In Mount abu
+*[12158]<a />
+	Hotels In Ahmedabad
+*[12159]<a />
+	Hotels In Kolkata
+*[12160]<a />
+	Hotels In Ranthambore
+*[12161]<a />
+	Jaisalmer Hotels
+*[12162]<a />
+	Mysore Hotels
+States of India
+*[12195]<a />
+	Hotels in Kerala
+*[12196]<a />
+	Hotels in Punjab
+*[12197]<a />
+	Hotels in Gujarat
+*[12198]<a />
+	Hotels in Andhra Pradesh
+*[12199]<a />
+	Hotels in Arunachal Pradesh
+*[12200]<a />
+	Hotels in Assam
+*[12201]<a />
+	Hotels in Bihar
+*[12202]<a />
+	Hotels in Chhattisgarh
+*[12203]<a />
+	Hotels in Haryana
+*[12204]<a />
+	Hotels in Himachal Pradesh
+*[12205]<a />
+	Hotels in Jharkhand
+*[12206]<a />
+	Hotels in Karnataka
+*[12207]<a />
+	Hotels in Ladakh
+*[12208]<a />
+	Hotels in Madhya Pradesh
+*[12209]<a />
+	Hotels in Maharashtra
+*[12210]<a />
+	Hotels in Manipur
+*[12211]<a />
+	Hotels in Meghalaya
+*[12212]<a />
+	Hotels in Mizoram
+*[12213]<a />
+	Hotels in Nagaland
+*[12214]<a />
+	Hotels in Odisha
+*[12215]<a />
+	Hotels in Telangana
+*[12216]<a />
+	Hotels in Tripura
+*[12217]<a />
+	Hotels in Rajasthan
+*[12218]<a />
+	Hotels in Tamil Nadu
+*[12219]<a />
+	Hotels in Uttar Pradesh
+*[12220]<a />
+	Hotels in Uttarakhand
+*[12221]<a />
+	Hotels in West Bengal
+Top Properties
+*[12249]<a />
+	W Goa
+*[12250]<a />
+	The Leela Goa
+*[12251]<a />
+	The Tamara Coorg
+*[12252]<a />
+	Evolve Back Coorg
+*[12253]<a />
+	Grand Hyatt Goa
+*[12254]<a />
+	Taj Lake Palace Udaipur
+*[12255]<a />
+	The Leela Palace Udaipur
+*[12256]<a />
+	Grand Hyatt Mumbai
+*[12257]<a />
+	Jw Marriott Chandigarh
+*[12258]<a />
+	Alila Diwa Goa
+*[12259]<a />
+	Evolve Back Hampi
+*[12260]<a />
+	Evolve Back Kabini
+*[12261]<a />
+	Hyatt Regency Mumbai
+*[12262]<a />
+	Le Meridien Delhi
+*[12263]<a />
+	Itc Grand Chola Chennai
+*[12264]<a />
+	Rambagh Palace Jaipur
+*[12265]<a />
+	Le Meridien Goa
+*[12266]<a />
+	Taj Lands End Mumbai
+*[12267]<a />
+	Jai Mahal Palace Jaipur
+*[12268]<a />
+	Vythiri Resort Wayanad
+*[12269]<a />
+	Red Earth Kabini
+*[12270]<a />
+	Taj Mahal Tower Mumbai
+*[12271]<a />
+	The Serai Bandipur
+*[12272]<a />
+	Wildflower Hall Shimla
+*[12273]<a />
+	Azaya Beach Resort Goa
+*[12274]<a />
+	Four Seasons Hotel Mumbai
+*[12275]<a />
+	Taj Fort Aguada Resort & Spa Goa
+*[12276]<a />
+	Itc Maratha Mumbai
+*[12277]<a />
+	Park Hyatt Chennai
+*[12278]<a />
+	Sea Shell Havelock
+*[12279]<a />
+	Spice Tree Munnar
+*[12280]<a />
+	ITC Grand Bharat
+*[12281]<a />
+	St Regis In Mumbai
+*[12282]<a />
+	Chennai Leela Palace
+*[12283]<a />
+	Hyatt Regency Delhi
+*[12284]<a />
+	Hyatt Grand Mumbai
+*[12285]<a />
+	Goa Radisson Blu
+*[12286]<a />
+	Fariyas Hotel
+*[12287]<a />
+	ITC Gardenia Bengaluru
+*[12288]<a />
+	Kumarakom Lake Resort
+*[12289]<a />
+	Taj Delhi Hotel
+*[12290]<a />
+	Surajkund Vivanta
+*[12291]<a />
+	JW Marriott Banglore
+*[12292]<a />
+	Alila Diwa Goa
+*[12293]<a />
+	Westin Goa
+*[12294]<a />
+	Trident Hotel Udaipur
+*[12295]<a />
+	Ritz Carlton Bangalore
+*[12296]<a />
+	Taj Hotel Lucknow
+*[12297]<a />
+	Leela In Kovalam
+*[12298]<a />
+	Trident Hotel Jaipur
+Corporate Travel
+*[12349]<a />
+	Business Travel
+*[12350]<a />
+	Corporate Travel
+*[12351]<a />
+	Corporate Travel Management
+*[12352]<a />
+	Corporate Travel Solution
+*[12353]<a />
+	Corporate Hotel Booking
+*[12354]<a />
+	Corporate Flight Booking
+*[12355]<a />
+	Expense Management
+*[12356]<a />
+	Corporate Expense Management
+*[12357]<a />
+	GST on Hotel Rooms
+*[12358]<a />
+	GST on Flight Tickets
+*[12359]<a />
+	Business Travel for SME
+*[12360]<a />
+	GST on International Flight Tickets​
+*[12361]<a />
+	GST on Bus Tickets
+*[12362]<a />
+	GST on Train Tickets
+*[12363]<a />
+	T&E (Travel & Expense)
+*[12364]<a />
+	myBiz - Best Business Travel Platform
+*[12365]<a />
+	GST Invoice for Corporate Travel
+*[12366]<a />
+	myBiz for Small Business
+*[12367]<a />
+	Free cancellation on International Flights
+Top Homestay Cities
+*[12387]<a />
+	Homestays In Chikmagalur
+*[12388]<a />
+	Homestays In Coorg
+*[12389]<a />
+	Homestays In Sakleshpur
+*[12390]<a />
+	Homestays In Goa
+*[12391]<a />
+	Homestays In Ooty
+*[12392]<a />
+	Homestays In Darjeeling
+*[12393]<a />
+	Homestays In Manali
+*[12394]<a />
+	Homestays In Munnar
+*[12395]<a />
+	Homestays In Wayanad
+*[12396]<a />
+	Homestays In Bengaluru
+*[12397]<a />
+	Homestays In Kasauli
+*[12398]<a />
+	Homestays In Kodaikanal
+*[12399]<a />
+	Homestays In Shimla
+*[12400]<a />
+	Homestays In Mysore
+*[12401]<a />
+	Homestays In Dandeli
+*[12402]<a />
+	Homestays In Dehradun
+*[12403]<a />
+	Homestays In Gokarna
+*[12404]<a />
+	Homestays In Mussoorie
+*[12405]<a />
+	Homestays In Nainital
+*[12406]<a />
+	Homestays In Rishikesh
+*[12407]<a />
+	Homestays In Vagamon
+*[12408]<a />
+	Homestays In Alibaug
+*[12409]<a />
+	Homestays In Kalimpong
+*[12410]<a />
+	Homestays In Mangalore
+*[12411]<a />
+	Homestays In Pondicherry
+*[12412]<a />
+	Homestays In Yercaud
+*[12413]<a />
+	Homestays In Coonoor
+*[12414]<a />
+	Homestays In Kabini
+*[12415]<a />
+	Homestays In Kasol
+*[12416]<a />
+	Homestays In Kurseong
+*[12417]<a />
+	Homestays In Mukteshwar
+Trending Resort Cities
+*[12449]<a />
+	Mahabaleshwar Resorts
+*[12450]<a />
+	Resorts In Agra
+*[12451]<a />
+	Resorts In Bhimtal
+*[12452]<a />
+	Resorts In Bordi
+*[12453]<a />
+	GraResorts In Br Hills
+*[12454]<a />
+	Resorts In Chikmagalur
+*[12455]<a />
+	Resorts In Cochin
+*[12456]<a />
+	Resorts In Darjeeling
+*[12457]<a />
+	Resorts In Dehradun
+*[12458]<a />
+	Resorts In Dharamshala
+*[12459]<a />
+	Resorts In Gorai
+*[12460]<a />
+	Resorts In Jaipur
+*[12461]<a />
+	Resorts In Jaisalmer
+*[12462]<a />
+	Resorts In Jodhpur
+*[12463]<a />
+	Resorts In Kanakapura
+*[12464]<a />
+	Resorts In Kollam
+*[12465]<a />
+	Resorts In Kotagiri
+*[12466]<a />
+	Resorts In Lucknow
+*[12467]<a />
+	Resorts In Madikeri
+*[12468]<a />
+	Resorts In Mahabaleshwar
+*[12469]<a />
+	Resorts In Masinagudi
+*[12470]<a />
+	Resorts In Matheran
+*[12471]<a />
+	Resorts In Mount Abu
+*[12472]<a />
+	Resorts In Mumbai
+*[12473]<a />
+	Resorts In Munnar
+*[12474]<a />
+	Resorts In Mussoorie
+*[12475]<a />
+	Resorts In Mysore
+*[12476]<a />
+	Resorts In Nainital
+*[12477]<a />
+	Resorts In Neemrana
+*[12478]<a />
+	Resorts In Kodaikanal
+Q. How to book a hotel online with MakeMyTrip?
+A. Booking a hotel online is easy through MakeMyTrip. All you need to do first is to download our app on your Android or iOS device or simply use your computer. On the app, tap on the Hotels section on the top left corner and enter the details of the city, the area or the
+*[13899]<a />
+	hotel
+. Fill out the check-in and check-out dates, along with the other details and tap Search. Use the Sort & Filter options so that you can book one as per your convenience. You can also choose hotels according to user reviews and ratings. The same follows on our site.
+Q. How to find the cheapest hotel deals in any city?
+A. MakeMyTrip, being the best hotel-booking site in the country, offers several discounts on budget hotels as well.  If you are looking for the
+*[13904]<a />
+	cheapest hotels
+with amazing deals on the app, you can tap on Sort & Filter option and drag down the Price option from Rs.0 to Rs.500 or from Rs.0 to Rs.1000. Choose from the various amenities you would need during your stay including access to Wi-Fi, room service and in-house restaurants. The list will first show you the cheapest one on top. You can also sort by prices from Low to High, scroll down the list and find your preferred ones with great discounts.
+</browser_state>
+<step_info>Step2 maximum:500
+Today:2026-09-15</step_info>
+
+Current screenshot:
+
+{
+  "thinking": "A login modal popped up on the page. According to the user request and rules, I must close any popup or login modal first before proceeding. I will use find_elements to locate the close button on the modal and click it.",
+  "evaluation_previous_goal": "Successfully clicked the Hotels tab, which opened the hotels page and triggered a login modal overlay. Verdict: Success",
+  "memory": "Navigated to makemytrip.com and clicked the Hotels tab. A login modal appeared which needs to be closed.",
+  "next_goal": "Close the login modal by clicking its close button.",
+  "current_plan_item": 0,
+  "plan_update": [
+    "Click the Hotels tab",
+    "Close login modal/popup",
+    "Type 'Goa' in the city/destination field and select from dropdown",
+    "Keep default or select check-in/check-out dates",
+    "Click Search button",
+    "Extract top 5 hotel results and output them in the requested JSON format"
+  ],
+  "action": [
+    {
+      "find_elements": {
+        "selector": "span, button, div",
+        "attributes": [
+          "class",
+          "data-cy",
+          "aria-label"
+        ],
+        "max_results": 50,
+        "include_text": true
+      }
+    }
+  ]
+}

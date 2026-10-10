@@ -1,0 +1,41 @@
+{
+  "name": "makemytrip-autonomous-web-agent",
+  "version": "1.0.0",
+  "description": "An autonomous GenAI-powered agent that operates the MakeMyTrip website — searching Flights, Trains, Buses, Cabs, Hotels, Villas, Attractions, Holiday Packages, and Cruises — using natural language task instructions, without any hardcoded selectors, and without using any paid API (Claude/OpenAI).",
+  "main": "app.py",
+  "private": true,
+  "scripts": {
+    "start": "streamlit run app.py",
+    "setup": "pip install -r requirements.txt && python -m playwright install chromium"
+  },
+  "keywords": [
+    "genai",
+    "autonomous-agent",
+    "llm-agent",
+    "browser-automation",
+    "browser-use",
+    "playwright",
+    "google-gemini",
+    "streamlit",
+    "makemytrip",
+    "web-scraping",
+    "python"
+  ],
+  "author": {
+    "name": "nstrivedi"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nstrivedi/Make_My_Trip_Autonomous_Web_Agent.git"
+  },
+  "homepage": "https://github.com/nstrivedi/Make_My_Trip_Autonomous_Web_Agent#readme",
+  "bugs": {
+    "url": "https://github.com/nstrivedi/Make_My_Trip_Autonomous_Web_Agent/issues"
+  },
+  "engines": {
+    "python": ">=3.10"
+  },
+  "runtime": "python",
+  "note": "This project is built entirely in Python. This package.json exists only as a project metadata/manifest file for repository presentation — it is NOT used to install or run the project. Actual dependencies are managed via requirements.txt (pip), not npm."
+}

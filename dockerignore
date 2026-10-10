@@ -1,0 +1,9 @@
+venv/
+.venv/
+.env
+.git/
+.streamlit/secrets.toml
+__pycache__/
+*.pyc
+results/
+competitor_test.py

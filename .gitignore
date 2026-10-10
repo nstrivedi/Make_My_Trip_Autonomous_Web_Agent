@@ -1,5 +1,20 @@
+# virtual environments
 venv/
-__pycache__/
+.venv/
+
+# secrets (NEVER upload API keys)
 .env
-logs/
+.streamlit/secrets.toml
+
+# python cache
+__pycache__/
 *.pyc
+
+# generated search results
+results/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
