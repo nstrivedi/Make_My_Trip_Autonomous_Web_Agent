@@ -14,6 +14,14 @@ Give it a task like *"cheapest flights Delhi → Goa for the next 2 days"* and i
 
 ---
 
+## 🎬 Brief Summary
+
+▶️ **[Watch the brief_summary_video_for_rough_idea_about_the_agent_work](Agent_Visuals/Working_demo_compressed.mp4)**
+
+> Ctrl+click the link to open the demo video in a new tab.
+
+---
+
 ## ✨ Features
 
 - **9 services in one app:** Flights, Trains, Buses, Cabs, Hotels, Villas & Homestays, Attractions, Holiday Packages, Cruises
@@ -93,6 +101,7 @@ Make_My_Trip_Autonomous_Web_Agent/
 ├── Agent_Visuals/           # Demo video, screenshots and project story slides
 │   ├── 1.png … 8.png
 │   ├── Demo_Video_(Deployment).mp4
+│   ├── Working_demo_compressed.mp4
 │   └── MakeMyTrip_Agent_Operation_Story.pptx
 ├── agent_core.py            # Core agent logic (browser agent, task prompts, schemas)
 ├── app.py                   # Streamlit app (home, service forms, results dashboard)
